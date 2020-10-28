@@ -1271,7 +1271,10 @@ void CompilerStack::generateEVM(ContractDefinition const& _contract)
 		BOOST_THROW_EXCEPTION(CompilerError() << errinfo_comment("Called generateEVM with errors."));
 
 	Contract& compiledContract = m_contracts.at(_contract.fullyQualifiedName());
-	solAssert(!compiledContract.yulIROptimized.empty(), "");
+	// Empty contract, ignore.
+	// TODO: check if this could happen in other cases.
+	if (compiledContract.yulIROptimized.empty())
+		return;
 	if (!compiledContract.object.bytecode.empty())
 		return;
 
@@ -1298,7 +1301,10 @@ void CompilerStack::generateEwasm(ContractDefinition const& _contract)
 		BOOST_THROW_EXCEPTION(CompilerError() << errinfo_comment("Called generateEwasm with errors."));
 
 	Contract& compiledContract = m_contracts.at(_contract.fullyQualifiedName());
-	solAssert(!compiledContract.yulIROptimized.empty(), "");
+	// Empty contract, ignore.
+	// TODO: check if this could happen in other cases.
+	if (compiledContract.yulIROptimized.empty())
+		return;
 	if (!compiledContract.ewasm.empty())
 		return;
 
