@@ -1594,7 +1594,7 @@ string YulUtilFunctions::copyByteArrayToStorageFunction(ArrayType const& _fromTy
 				if gt(oldLen, 31) {
 					// potentially truncate data
 					let deleteStart := add(dstDataArea, div(add(newLen, 31), 32))
-					<clearStorageRange>(deleteStart, add(src, div(add(oldLen, 31), 32)))
+					<clearStorageRange>(deleteStart, add(dstDataArea, div(add(oldLen, 31), 32)))
 				}
 				switch gt(newLen, 31)
 				case 1 {
