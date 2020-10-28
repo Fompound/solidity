@@ -35,8 +35,20 @@ bool CFG::constructFlow(ASTNode const& _astRoot)
 bool CFG::visit(FunctionDefinition const& _function)
 {
 	if (_function.isImplemented())
-		m_functionControlFlow[&_function] = ControlFlowBuilder::createFunctionFlow(m_nodeContainer, _function);
+		m_functionControlFlow[&_function] = ControlFlowBuilder::createFunctionFlow(m_nodeContainer, _function, m_contract);
 	return false;
+}
+
+bool CFG::visit(ContractDefinition const& _contract)
+{
+	m_contract = &_contract;
+	return true;
+}
+
+void CFG::endVisit(ContractDefinition const& _contract)
+{
+	solAssert(m_contract == &_contract, "");
+	m_contract = nullptr;
 }
 
 FunctionFlow const& CFG::functionFlow(FunctionDefinition const& _function) const

@@ -25,7 +25,40 @@ using namespace solidity::langutil;
 using namespace solidity::frontend;
 using namespace std;
 
-ControlFlowBuilder::ControlFlowBuilder(CFG::NodeContainer& _nodeContainer, FunctionFlow const& _functionFlow):
+namespace {
+
+bool hasExit(FunctionFlow const& _functionFlow)
+{
+	// Nodes to traverse
+	set<CFGNode const*> nodesToTraverse{_functionFlow.entry};
+	// Nodes traversed (to prevent loops)
+	set<CFGNode const*> nodesTraveresed{};
+
+	while (!nodesToTraverse.empty())
+	{
+		CFGNode const* currentNode = *nodesToTraverse.begin();
+		nodesToTraverse.erase(nodesToTraverse.begin());
+		nodesTraveresed.emplace(currentNode);
+
+		for (auto const& exit: currentNode->exits)
+			if (exit == _functionFlow.exit)
+				return true;
+			else if (!nodesTraveresed.count(exit))
+				nodesToTraverse.emplace(exit);
+	}
+	return false;
+}
+
+}
+
+ControlFlowBuilder::ControlFlowBuilder(
+	CFG::NodeContainer& _nodeContainer,
+	FunctionFlow const& _functionFlow,
+	ContractDefinition const* _contract,
+	std::map<FunctionDefinition const*, unique_ptr<FunctionFlow>>& _visitedFunctions
+):
+	m_contract(_contract),
+	m_visitedFunctions(_visitedFunctions),
 	m_nodeContainer(_nodeContainer),
 	m_currentNode(_functionFlow.entry),
 	m_returnNode(_functionFlow.exit),
@@ -34,18 +67,25 @@ ControlFlowBuilder::ControlFlowBuilder(CFG::NodeContainer& _nodeContainer, Funct
 {
 }
 
-
-unique_ptr<FunctionFlow> ControlFlowBuilder::createFunctionFlow(
-	CFG::NodeContainer& _nodeContainer,
-	FunctionDefinition const& _function
-)
+std::unique_ptr<FunctionFlow> ControlFlowBuilder::initFunctionFlow(CFG::NodeContainer& _nodeContainer)
 {
 	auto functionFlow = make_unique<FunctionFlow>();
 	functionFlow->entry = _nodeContainer.newNode();
 	functionFlow->exit = _nodeContainer.newNode();
 	functionFlow->revert = _nodeContainer.newNode();
 	functionFlow->transactionReturn = _nodeContainer.newNode();
-	ControlFlowBuilder builder(_nodeContainer, *functionFlow);
+	return functionFlow;
+}
+
+unique_ptr<FunctionFlow> ControlFlowBuilder::createFunctionFlow(
+	CFG::NodeContainer& _nodeContainer,
+	FunctionDefinition const& _function,
+	ContractDefinition const* _contract
+)
+{
+	auto functionFlow = initFunctionFlow(_nodeContainer);
+	std::map<FunctionDefinition const*, unique_ptr<FunctionFlow>> visitedFunctions;
+	ControlFlowBuilder builder(_nodeContainer, *functionFlow, _contract, visitedFunctions);
 	builder.appendControlFlow(_function);
 
 	return functionFlow;
@@ -277,6 +317,55 @@ bool ControlFlowBuilder::visit(FunctionCall const& _functionCall)
 				m_currentNode = nextNode;
 				return false;
 			}
+			case FunctionType::Kind::Internal:
+			case FunctionType::Kind::DelegateCall:
+			{
+				solAssert(!!m_revertNode, "");
+				visitNode(_functionCall);
+				_functionCall.expression().accept(*this);
+				ASTNode::listAccept(_functionCall.arguments(), *this);
+
+				auto const* functionType = dynamic_cast<FunctionType const*>(
+					_functionCall.expression().annotation().type);
+
+				if (!functionType->hasDeclaration())
+					return false;
+
+				auto const* unresolvedFunctionDefinition =
+					dynamic_cast<FunctionDefinition const*>(&functionType->declaration());
+
+				auto const& functionDefinition = m_contract ?
+					unresolvedFunctionDefinition->resolveVirtual(*m_contract) :
+					*unresolvedFunctionDefinition;
+
+				if (!functionDefinition.isImplemented())
+					return false;
+
+				if (m_visitedFunctions.count(&functionDefinition))
+					return false;
+
+				auto& functionFlow = *m_visitedFunctions.emplace(&functionDefinition, initFunctionFlow(m_nodeContainer)).first->second;
+
+				ControlFlowBuilder builder(m_nodeContainer, functionFlow, m_contract, m_visitedFunctions);
+				builder.appendControlFlow(functionDefinition);
+
+				// Function does not have any exit
+				if (!hasExit(functionFlow))
+				{
+					connect(m_currentNode, m_revertNode);
+					m_currentNode = newLabel();
+				}
+				else
+				{
+					auto nextNode = newLabel();
+					connect(m_currentNode, nextNode);
+					m_currentNode = nextNode;
+				}
+
+				return false;
+				break;
+			}
+
 			default:
 				break;
 		}

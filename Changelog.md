@@ -4,6 +4,7 @@
 Bugfixes:
  * SMTChecker: Fix lack of reporting potential violations when using only the CHC engine.
  * Code generator: Fix missing creation dependency tracking for abstract contracts.
+ * Control Flow Graph: Remove wrong warning when functions that always ``revert()`` are called
 
 
 ### 0.7.4 (2020-10-19)
