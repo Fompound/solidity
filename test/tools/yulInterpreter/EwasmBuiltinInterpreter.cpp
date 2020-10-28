@@ -494,12 +494,11 @@ u256 EwasmBuiltinInterpreter::evalEthBuiltin(string const& _fun, vector<uint64_t
 
 void EwasmBuiltinInterpreter::accessMemory(u256 const& _offset, u256 const& _size)
 {
-	if (((_offset + _size) >= _offset) && ((_offset + _size + 0x1f) >= (_offset + _size)))
-	{
-		u256 newSize = (_offset + _size + 0x1f) & ~u256(0x1f);
-		m_state.msize = max(m_state.msize, newSize);
-	}
-	else
+	// Single WebAssembly page.
+	// TODO: Support expansion in this interpreter.
+	m_state.msize = 65536;
+
+	if (((_offset + _size) < _offset) || ((_offset + _size) > m_state.msize))
 		// Ewasm throws out of bounds exception as opposed to the EVM.
 		throw ExplicitlyTerminated();
 }
