@@ -132,6 +132,14 @@ void CompilerStack::setRemappings(vector<Remapping> const& _remappings)
 	m_remappings = _remappings;
 }
 
+
+void CompilerStack::setViaIR(bool _viaIR)
+{
+	if (m_stackState >= ParsedAndImported)
+		BOOST_THROW_EXCEPTION(CompilerError() << errinfo_comment("Must set viaIR before parsing."));
+	m_viaIR = _viaIR;
+}
+
 void CompilerStack::setEVMVersion(langutil::EVMVersion _version)
 {
 	if (m_stackState >= ParsedAndImported)
@@ -533,10 +541,15 @@ bool CompilerStack::compile(State _stopAfter)
 				{
 					try
 					{
-						if (m_generateEvmBytecode)
-							compileContract(*contract, otherCompilers);
-						if (m_generateIR || m_generateEwasm)
+						if (m_viaIR || m_generateIR || m_generateEwasm)
 							generateIR(*contract);
+						if (m_generateEvmBytecode)
+						{
+							if (m_viaIR)
+								generateEVM(*contract);
+							else
+								compileContract(*contract, otherCompilers);
+						}
 						if (m_generateEwasm)
 							generateEwasm(*contract);
 					}
@@ -1249,6 +1262,33 @@ void CompilerStack::generateIR(ContractDefinition const& _contract)
 
 	IRGenerator generator(m_evmVersion, m_revertStrings, m_optimiserSettings);
 	tie(compiledContract.yulIR, compiledContract.yulIROptimized) = generator.run(_contract, otherYulSources);
+}
+
+void CompilerStack::generateEVM(ContractDefinition const& _contract)
+{
+	solAssert(m_stackState >= AnalysisPerformed, "");
+	if (m_hasError)
+		BOOST_THROW_EXCEPTION(CompilerError() << errinfo_comment("Called generateEVM with errors."));
+
+	Contract& compiledContract = m_contracts.at(_contract.fullyQualifiedName());
+	solAssert(!compiledContract.yulIROptimized.empty(), "");
+	if (!compiledContract.object.bytecode.empty())
+		return;
+
+	// Re-parse the Yul IR in EVM dialect
+	yul::AssemblyStack stack(m_evmVersion, yul::AssemblyStack::Language::StrictAssembly, m_optimiserSettings);
+	stack.parseAndAnalyze("", compiledContract.yulIROptimized);
+	stack.optimize();
+
+	//cout << yul::AsmPrinter{}(*stack.parserResult()->code) << endl;
+
+	// TODO: support passing metadata
+	auto result = stack.assemble(yul::AssemblyStack::Machine::EVM);
+	compiledContract.object = std::move(*result.bytecode);
+	// TODO: support runtimeObject
+	// TODO: add EIP-170 size check for runtimeObject
+	// TODO: refactor assemblyItems, runtimeAssemblyItems, generatedSources,
+	//       assemblyString, assemblyJSON, and functionEntryPoints to work with this code path
 }
 
 void CompilerStack::generateEwasm(ContractDefinition const& _contract)
