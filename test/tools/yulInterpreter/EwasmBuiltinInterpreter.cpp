@@ -115,8 +115,6 @@ uint64_t popcnt(uint64_t _v)
 
 }
 
-using u512 = boost::multiprecision::number<boost::multiprecision::cpp_int_backend<512, 256, boost::multiprecision::unsigned_magnitude, boost::multiprecision::unchecked, void>>;
-
 u256 EwasmBuiltinInterpreter::evalBuiltin(
 	YulString _functionName,
 	vector<Expression> const& _arguments,
