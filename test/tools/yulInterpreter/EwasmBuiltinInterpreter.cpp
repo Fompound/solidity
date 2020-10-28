@@ -144,14 +144,14 @@ u256 EwasmBuiltinInterpreter::evalBuiltin(
 	else if (fun == "datacopy")
 	{
 		// This is identical to codecopy.
-		if (accessMemory(_evaluatedArguments.at(0), _evaluatedArguments.at(2)))
-			copyZeroExtended(
-				m_state.memory,
-				m_state.code,
-				static_cast<size_t>(_evaluatedArguments.at(0)),
-				static_cast<size_t>(_evaluatedArguments.at(1) & numeric_limits<size_t>::max()),
-				static_cast<size_t>(_evaluatedArguments.at(2))
-			);
+		accessMemory(_evaluatedArguments.at(0), _evaluatedArguments.at(2));
+		copyZeroExtended(
+			m_state.memory,
+			m_state.code,
+			static_cast<size_t>(_evaluatedArguments.at(0)),
+			static_cast<size_t>(_evaluatedArguments.at(1) & numeric_limits<size_t>::max()),
+			static_cast<size_t>(_evaluatedArguments.at(2))
+		);
 		return 0;
 	}
 	else if (fun == "i32.drop" || fun == "i64.drop" || fun == "nop")
@@ -324,11 +324,11 @@ u256 EwasmBuiltinInterpreter::evalEthBuiltin(string const& _fun, vector<uint64_t
 	{
 		if (arg[1] + arg[2] < arg[1] || arg[1] + arg[2] > m_state.calldata.size())
 			throw ExplicitlyTerminated();
-		if (accessMemory(arg[0], arg[2]))
-			copyZeroExtended(
-				m_state.memory, m_state.calldata,
-				size_t(arg[0]), size_t(arg[1]), size_t(arg[2])
-			);
+		accessMemory(arg[0], arg[2]);
+		copyZeroExtended(
+			m_state.memory, m_state.calldata,
+			size_t(arg[0]), size_t(arg[1]), size_t(arg[2])
+		);
 		return {};
 	}
 	else if (_fun == "getCallDataSize")
@@ -377,11 +377,11 @@ u256 EwasmBuiltinInterpreter::evalEthBuiltin(string const& _fun, vector<uint64_t
 	}
 	else if (_fun == "codeCopy")
 	{
-		if (accessMemory(arg[0], arg[2]))
-			copyZeroExtended(
-				m_state.memory, m_state.code,
-				size_t(arg[0]), size_t(arg[1]), size_t(arg[2])
-			);
+		accessMemory(arg[0], arg[2]);
+		copyZeroExtended(
+			m_state.memory, m_state.code,
+			size_t(arg[0]), size_t(arg[1]), size_t(arg[2])
+		);
 		return 0;
 	}
 	else if (_fun == "getCodeSize")
@@ -407,12 +407,12 @@ u256 EwasmBuiltinInterpreter::evalEthBuiltin(string const& _fun, vector<uint64_t
 	else if (_fun == "externalCodeCopy")
 	{
 		readAddress(arg[0]);
-		if (accessMemory(arg[1], arg[3]))
-			// TODO this way extcodecopy and codecopy do the same thing.
-			copyZeroExtended(
-				m_state.memory, m_state.code,
-				size_t(arg[1]), size_t(arg[2]), size_t(arg[3])
-			);
+		accessMemory(arg[1], arg[3]);
+		// TODO this way extcodecopy and codecopy do the same thing.
+		copyZeroExtended(
+			m_state.memory, m_state.code,
+			size_t(arg[1]), size_t(arg[2]), size_t(arg[3])
+		);
 		return 0;
 	}
 	else if (_fun == "getExternalCodeSize")
@@ -454,16 +454,16 @@ u256 EwasmBuiltinInterpreter::evalEthBuiltin(string const& _fun, vector<uint64_t
 	else if (_fun == "finish")
 	{
 		bytes data;
-		if (accessMemory(arg[0], arg[1]))
-			data = readMemory(arg[0], arg[1]);
+		accessMemory(arg[0], arg[1]);
+		data = readMemory(arg[0], arg[1]);
 		logTrace(evmasm::Instruction::RETURN, {}, data);
 		throw ExplicitlyTerminated();
 	}
 	else if (_fun == "revert")
 	{
 		bytes data;
-		if (accessMemory(arg[0], arg[1]))
-			data = readMemory(arg[0], arg[1]);
+		accessMemory(arg[0], arg[1]);
+		data = readMemory(arg[0], arg[1]);
 		logTrace(evmasm::Instruction::REVERT, {}, data);
 		throw ExplicitlyTerminated();
 	}
@@ -473,11 +473,11 @@ u256 EwasmBuiltinInterpreter::evalEthBuiltin(string const& _fun, vector<uint64_t
 	{
 		if (arg[1] + arg[2] < arg[1] || arg[1] + arg[2] > m_state.returndata.size())
 			throw ExplicitlyTerminated();
-		if (accessMemory(arg[0], arg[2]))
-			copyZeroExtended(
-				m_state.memory, m_state.calldata,
-				size_t(arg[0]), size_t(arg[1]), size_t(arg[2])
-			);
+		accessMemory(arg[0], arg[2]);
+		copyZeroExtended(
+			m_state.memory, m_state.calldata,
+			size_t(arg[0]), size_t(arg[1]), size_t(arg[2])
+		);
 		return {};
 	}
 	else if (_fun == "selfDestruct")
@@ -494,17 +494,16 @@ u256 EwasmBuiltinInterpreter::evalEthBuiltin(string const& _fun, vector<uint64_t
 	return 0;
 }
 
-bool EwasmBuiltinInterpreter::accessMemory(u256 const& _offset, u256 const& _size)
+void EwasmBuiltinInterpreter::accessMemory(u256 const& _offset, u256 const& _size)
 {
 	if (((_offset + _size) >= _offset) && ((_offset + _size + 0x1f) >= (_offset + _size)))
 	{
 		u256 newSize = (_offset + _size + 0x1f) & ~u256(0x1f);
 		m_state.msize = max(m_state.msize, newSize);
-		return _size <= 0xffff;
 	}
-
-	// Ewasm throws out of bounds exception as opposed to the EVM.
-	throw ExplicitlyTerminated();
+	else
+		// Ewasm throws out of bounds exception as opposed to the EVM.
+		throw ExplicitlyTerminated();
 }
 
 bytes EwasmBuiltinInterpreter::readMemory(uint64_t _offset, uint64_t _size)
