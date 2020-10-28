@@ -1,6 +1,7 @@
 ### 0.7.5 (unreleased)
 
 Compiler Features:
+ * Command Line Interface: New option ``--experimental-via-ir`` allows examining generated code via the Yul intermediate representation.
  * SMTChecker: Add division by zero checks in the CHC engine.
  * SMTChecker: Support ``selector`` for expressions with value known at compile-time.
 
