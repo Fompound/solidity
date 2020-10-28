@@ -502,10 +502,9 @@ bool EwasmBuiltinInterpreter::accessMemory(u256 const& _offset, u256 const& _siz
 		m_state.msize = max(m_state.msize, newSize);
 		return _size <= 0xffff;
 	}
-	else
-		m_state.msize = u256(-1);
 
-	return false;
+	// Ewasm throws out of bounds exception as opposed to the EVM.
+	throw ExplicitlyTerminated();
 }
 
 bytes EwasmBuiltinInterpreter::readMemory(uint64_t _offset, uint64_t _size)
